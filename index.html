@@ -44,7 +44,7 @@
             <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4 flex items-center justify-between text-xs md:text-sm">
                 <span class="font-medium text-yellow-800"><i class="fa-solid fa-key mr-1"></i> Google Gemini API Key:</span>
                 <div class="flex space-x-2">
-                    <input type="password" id="apiKeyInput" placeholder="Paste your AI Studio Key here" class="px-2 py-1 border rounded text-xs w-48 md:w-64">
+                    <input type="password" id="apiKeyInput" placeholder="Paste your API key here" class="px-2 py-1 border rounded text-xs w-48 md:w-64">
                     <button onclick="saveKey()" class="bg-yellow-600 text-white px-3 py-1 rounded text-xs">Save Key</button>
                 </div>
             </div>
@@ -112,6 +112,8 @@
     </main>
 
     <script>
+        let verifiedWorkingModel = 'gemini-3.6-flash';
+
         window.onload = function() {
             const savedKey = localStorage.getItem('dr_samrat_gemini_key');
             if (savedKey) {
@@ -134,6 +136,23 @@
 
         function setPrompt(txt) {
             document.getElementById('userPrompt').value = txt;
+        }
+
+        async function discoverAvailableModel(apiKey) {
+            try {
+                const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`;
+                const res = await fetch(listUrl);
+                const data = await res.json();
+                if (data.models && data.models.length > 0) {
+                    const flashModel = data.models.find(m => m.name.includes('flash') && m.supportedGenerationMethods.includes('generateContent'));
+                    if (flashModel) {
+                        return flashModel.name.replace('models/', '');
+                    }
+                }
+            } catch (e) {
+                console.error("Model discovery failed, using default.", e);
+            }
+            return 'gemini-3.6-flash';
         }
 
         async function fetchGeminiResponse(apiKey, prompt, modelName) {
@@ -172,9 +191,15 @@
             chatBox.scrollTop = chatBox.scrollHeight;
 
             try {
-                // Pointing directly to gemini-3.6-flash
-                let response = await fetchGeminiResponse(apiKey, prompt, 'gemini-3.6-flash');
+                let response = await fetchGeminiResponse(apiKey, prompt, verifiedWorkingModel);
                 let data = await response.json();
+
+                // Dynamic Discovery Fallback on 404 Model Error
+                if (data.error && (data.error.code === 404 || data.error.status === 'NOT_FOUND')) {
+                    verifiedWorkingModel = await discoverAvailableModel(apiKey);
+                    response = await fetchGeminiResponse(apiKey, prompt, verifiedWorkingModel);
+                    data = await response.json();
+                }
 
                 document.getElementById(loadingId).remove();
 
