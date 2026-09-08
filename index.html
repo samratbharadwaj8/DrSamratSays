@@ -41,7 +41,7 @@
             <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4 flex items-center justify-between text-xs md:text-sm">
                 <span class="font-medium text-yellow-800"><i class="fa-solid fa-key mr-1"></i> Google Gemini API Key:</span>
                 <div class="flex space-x-2">
-                    <input type="password" id="apiKeyInput" placeholder="Paste key here..." class="px-2 py-1 border rounded text-xs w-48 md:w-64">
+                    <input type="password" id="apiKeyInput" placeholder="Paste AQ.ab... or AIzaSy... key here" class="px-2 py-1 border rounded text-xs w-48 md:w-64">
                     <button onclick="saveKey()" class="bg-yellow-600 text-white px-3 py-1 rounded text-xs">Save Key</button>
                 </div>
             </div>
@@ -154,13 +154,14 @@
             chatBox.scrollTop = chatBox.scrollHeight;
 
             try {
-                // Direct call to Gemini v1beta endpoint using URL parameter authentication
-                const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+                // Compatible endpoint for both Auth (AQ.ab...) and Standard (AIzaSy...) keys
+                const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
                 
                 const response = await fetch(endpoint, {
                     method: 'POST',
                     headers: { 
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'x-goog-api-key': apiKey
                     },
                     body: JSON.stringify({
                         contents: [{
@@ -176,13 +177,13 @@
                     const reply = data.candidates[0].content.parts[0].text;
                     chatBox.innerHTML += `<div class="text-left"><div class="bg-gray-100 p-3 rounded-lg text-sm inline-block border text-gray-800">${marked.parse(reply)}</div></div>`;
                 } else if (data.error) {
-                    chatBox.innerHTML += `<div class="text-left text-red-600 text-xs bg-red-50 p-2 rounded border border-red-200"><strong>API Error (${data.error.code || '400'}):</strong> ${data.error.message}</div>`;
+                    chatBox.innerHTML += `<div class="text-left text-red-600 text-xs bg-red-50 p-2 rounded border border-red-200"><strong>API Error (${data.error.code || 'Error'}):</strong> ${data.error.message}</div>`;
                 } else {
-                    chatBox.innerHTML += `<div class="text-left text-red-600 text-xs bg-red-50 p-2 rounded border border-red-200">Error: Received unexpected response format from Google API.</div>`;
+                    chatBox.innerHTML += `<div class="text-left text-red-600 text-xs bg-red-50 p-2 rounded border border-red-200">Error: Received unexpected response format.</div>`;
                 }
             } catch (err) {
                 document.getElementById(loadingId).remove();
-                chatBox.innerHTML += `<div class="text-left text-red-600 text-xs bg-red-50 p-2 rounded border border-red-200">Network Error: Unable to complete API request. Please verify internet connectivity or API key permissions.</div>`;
+                chatBox.innerHTML += `<div class="text-left text-red-600 text-xs bg-red-50 p-2 rounded border border-red-200">Network Error: Unable to complete request. Check connectivity or API key.</div>`;
             }
             chatBox.scrollTop = chatBox.scrollHeight;
         }
