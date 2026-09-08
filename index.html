@@ -136,6 +136,22 @@
             document.getElementById('userPrompt').value = txt;
         }
 
+        async function fetchGeminiResponse(apiKey, prompt, modelName) {
+            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
+            return fetch(endpoint, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': apiKey
+                },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{ text: "System Persona: You are 'Dr. Samrat Says', an expert academic professor in Commerce, Management, Consumer Behaviour, Research Methodology, and Statistical Software (SPSS, AMOS, R, STATA, JASP, PRISMA, VOSviewer). Provide rigorous, clear academic guidance with step-by-step points, tables, and examples.\n\nStudent Query: " + prompt }]
+                    }]
+                })
+            });
+        }
+
         async function sendMessage() {
             let apiKey = document.getElementById('apiKeyInput').value.trim();
             const prompt = document.getElementById('userPrompt').value.trim();
@@ -157,23 +173,16 @@
             chatBox.scrollTop = chatBox.scrollHeight;
 
             try {
-                // Active stable endpoint for Google Gemini API
-                const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
-                
-                const response = await fetch(endpoint, {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'x-goog-api-key': apiKey
-                    },
-                    body: JSON.stringify({
-                        contents: [{
-                            parts: [{ text: "System Persona: You are 'Dr. Samrat Says', an expert academic professor in Commerce, Management, Consumer Behaviour, Research Methodology, and Statistical Software (SPSS, AMOS, R, STATA, JASP, PRISMA, VOSviewer). Provide rigorous, clear academic guidance with step-by-step points, tables, and examples.\n\nStudent Query: " + prompt }]
-                        }]
-                    })
-                });
+                // Primary endpoint request using alias
+                let response = await fetchGeminiResponse(apiKey, prompt, 'gemini-flash-latest');
+                let data = await response.json();
 
-                const data = await response.json();
+                // Auto-fallback if alias produces a 404 model error
+                if (data.error && data.error.code === 404) {
+                    response = await fetchGeminiResponse(apiKey, prompt, 'gemini-2.0-flash');
+                    data = await response.json();
+                }
+
                 document.getElementById(loadingId).remove();
 
                 if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts[0].text) {
