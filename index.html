@@ -41,7 +41,7 @@
             <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4 flex items-center justify-between text-xs md:text-sm">
                 <span class="font-medium text-yellow-800"><i class="fa-solid fa-key mr-1"></i> Google Gemini API Key:</span>
                 <div class="flex space-x-2">
-                    <input type="password" id="apiKeyInput" placeholder="Paste key once..." class="px-2 py-1 border rounded text-xs w-48 md:w-64">
+                    <input type="password" id="apiKeyInput" placeholder="Paste AQ.ab... key once" class="px-2 py-1 border rounded text-xs w-48 md:w-64">
                     <button onclick="saveKey()" class="bg-yellow-600 text-white px-3 py-1 rounded text-xs">Save</button>
                 </div>
             </div>
@@ -109,7 +109,6 @@
     </main>
 
     <script>
-        // Auto-load saved API key on page open
         window.onload = function() {
             const savedKey = localStorage.getItem('dr_samrat_gemini_key');
             if (savedKey) {
@@ -118,9 +117,9 @@
         };
 
         function saveKey() {
-            const key = document.getElementById('apiKeyInput').value;
+            const key = document.getElementById('apiKeyInput').value.trim();
             localStorage.setItem('dr_samrat_gemini_key', key);
-            alert('API Key saved to your browser memory!');
+            alert('API Key saved to your browser!');
         }
 
         function switchTab(tab) {
@@ -135,14 +134,13 @@
         }
 
         async function sendMessage() {
-            let apiKey = document.getElementById('apiKeyInput').value;
-            const prompt = document.getElementById('userPrompt').value;
+            let apiKey = document.getElementById('apiKeyInput').value.trim();
+            const prompt = document.getElementById('userPrompt').value.trim();
             const chatBox = document.getElementById('chatBox');
 
-            if (!apiKey) { alert('Please enter your Gemini API Key in the top box!'); return; }
+            if (!apiKey) { alert('Please paste your Gemini API Key in the yellow box!'); return; }
             if (!prompt) return;
 
-            // Auto-save key if not already saved
             localStorage.setItem('dr_samrat_gemini_key', apiKey);
 
             chatBox.innerHTML += `<div class="text-right"><span class="bg-blue-900 text-white p-2 rounded-lg text-sm inline-block">${prompt}</span></div>`;
@@ -153,26 +151,34 @@
             chatBox.scrollTop = chatBox.scrollHeight;
 
             try {
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey.trim()}`, {
+                // Updated to Gemini 2.5 Flash API with header authentication
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'x-goog-api-key': apiKey
+                    },
                     body: JSON.stringify({
                         contents: [{
                             parts: [{ text: "System Persona: You are 'Dr. Samrat Says', an expert academic professor in Commerce, Management, Consumer Behaviour, Research Methodology, and Statistical Software (SPSS, AMOS, R, STATA, JASP, PRISMA, VOSviewer). Provide rigorous, clear academic guidance with step-by-step points, tables, and examples.\n\nStudent Query: " + prompt }]
                         }]
                     })
                 });
+
                 const data = await response.json();
                 document.getElementById(loadingId).remove();
-                if(data.candidates && data.candidates[0].content.parts[0].text) {
+
+                if (data.candidates && data.candidates[0].content.parts[0].text) {
                     const reply = data.candidates[0].content.parts[0].text;
                     chatBox.innerHTML += `<div class="text-left"><div class="bg-gray-100 p-3 rounded-lg text-sm inline-block border text-gray-800">${marked.parse(reply)}</div></div>`;
+                } else if (data.error) {
+                    chatBox.innerHTML += `<div class="text-left text-red-600 text-xs">API Error: ${data.error.message}</div>`;
                 } else {
-                    chatBox.innerHTML += `<div class="text-left text-red-600 text-xs">Error: Invalid API response. Check your API key.</div>`;
+                    chatBox.innerHTML += `<div class="text-left text-red-600 text-xs">Error: Unexpected API response format.</div>`;
                 }
             } catch (err) {
                 document.getElementById(loadingId).remove();
-                chatBox.innerHTML += `<div class="text-left text-red-600 text-xs">Error connecting to AI service.</div>`;
+                chatBox.innerHTML += `<div class="text-left text-red-600 text-xs">Network Error: Unable to connect to Google API.</div>`;
             }
             chatBox.scrollTop = chatBox.scrollHeight;
         }
