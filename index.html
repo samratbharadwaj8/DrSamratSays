@@ -44,7 +44,7 @@
             <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4 flex items-center justify-between text-xs md:text-sm">
                 <span class="font-medium text-yellow-800"><i class="fa-solid fa-key mr-1"></i> Google Gemini API Key:</span>
                 <div class="flex space-x-2">
-                    <input type="password" id="apiKeyInput" placeholder="Paste your API key here" class="px-2 py-1 border rounded text-xs w-48 md:w-64">
+                    <input type="password" id="apiKeyInput" placeholder="Paste your Google Gemini API Key here" class="px-2 py-1 border rounded text-xs w-48 md:w-64">
                     <button onclick="saveKey()" class="bg-yellow-600 text-white px-3 py-1 rounded text-xs">Save Key</button>
                 </div>
             </div>
@@ -113,6 +113,7 @@
 
     <script>
         let verifiedWorkingModel = 'gemini-3.6-flash';
+        let chatHistory = [];
 
         window.onload = function() {
             const savedKey = localStorage.getItem('dr_samrat_gemini_key');
@@ -150,23 +151,32 @@
                     }
                 }
             } catch (e) {
-                console.error("Model discovery failed, using default.", e);
+                console.error("Model discovery failed, fallback retained.", e);
             }
             return 'gemini-3.6-flash';
         }
 
-        async function fetchGeminiResponse(apiKey, prompt, modelName) {
+        async function fetchGeminiResponse(apiKey, payloadContents, modelName) {
             const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
+            
+            const systemInstruction = {
+                role: "user",
+                parts: [{ text: "SYSTEM INSTRUCTION & PERSONA:\n" +
+                    "You are 'Dr. Samrat Says', an expert academic mentor in Commerce, Management, and Research Methodology.\n\n" +
+                    "ADAPTIVE RESPONSE RULES:\n" +
+                    "1. QUESTION COMPLEXITY COMPREHENSION: Match output length directly to query complexity. For basic definition queries (e.g., 'Who is a consumer?', 'Define ROI'), provide a concise 2-3 sentence answer with one clear real-world example. Do NOT generate unnecessary multi-section academic lectures, 5-point breakdowns, or tables for simple queries unless explicitly asked for an in-depth breakdown.\n" +
+                    "2. ADAPTIVE DEPTH: Reserve full multi-part structures (tables, software steps, methodologies) ONLY for complex, multi-variable, or advanced analytical questions (e.g., SEM modeling, PRISMA steps, bibliometrics).\n" +
+                    "3. STRICT CONTEXTUAL SIMPLIFICATION: If the user asks to 'simplify', 'make it easier', or 'explain simply', SIMPLIFY THE EXACT TOPIC JUST DISCUSSED IN THE IMMEDIATE PRIOR TURN. Do NOT output generic introductions, self-promotional templates, or introduce unrelated topics (like SPSS/AMOS/PRISMA) unless they were part of the preceding turn.\n" +
+                    "4. NO BOILERPLATE INTROS: Begin answers directly with the explanation. Never start with intro greetings like 'Greetings! I am Dr. Samrat Says. Welcome to today's academic discussion...'."
+                }]
+            };
+
+            const fullContents = [systemInstruction, ...payloadContents];
+
             return fetch(endpoint, {
                 method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    contents: [{
-                        parts: [{ text: "System Persona: You are 'Dr. Samrat Says', an expert academic professor in Commerce, Management, Consumer Behaviour, Research Methodology, and Statistical Software (SPSS, AMOS, R, STATA, JASP, PRISMA, VOSviewer). Provide rigorous, clear academic guidance with step-by-step points, tables, and examples.\n\nStudent Query: " + prompt }]
-                    }]
-                })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contents: fullContents })
             });
         }
 
@@ -183,21 +193,24 @@
 
             localStorage.setItem('dr_samrat_gemini_key', apiKey);
 
+            // Append User Prompt to UI and History
             chatBox.innerHTML += `<div class="text-right"><span class="bg-blue-900 text-white p-2 rounded-lg text-sm inline-block">${prompt}</span></div>`;
             document.getElementById('userPrompt').value = '';
+
+            chatHistory.push({ role: "user", parts: [{ text: prompt }] });
 
             const loadingId = 'load-' + Date.now();
             chatBox.innerHTML += `<div id="${loadingId}" class="text-left text-xs text-gray-500 italic">Dr. Samrat Says is thinking...</div>`;
             chatBox.scrollTop = chatBox.scrollHeight;
 
             try {
-                let response = await fetchGeminiResponse(apiKey, prompt, verifiedWorkingModel);
+                let response = await fetchGeminiResponse(apiKey, chatHistory, verifiedWorkingModel);
                 let data = await response.json();
 
                 // Dynamic Discovery Fallback on 404 Model Error
                 if (data.error && (data.error.code === 404 || data.error.status === 'NOT_FOUND')) {
                     verifiedWorkingModel = await discoverAvailableModel(apiKey);
-                    response = await fetchGeminiResponse(apiKey, prompt, verifiedWorkingModel);
+                    response = await fetchGeminiResponse(apiKey, chatHistory, verifiedWorkingModel);
                     data = await response.json();
                 }
 
@@ -205,15 +218,22 @@
 
                 if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts[0].text) {
                     const reply = data.candidates[0].content.parts[0].text;
+                    
+                    // Maintain conversational state history
+                    chatHistory.push({ role: "model", parts: [{ text: reply }] });
+
                     chatBox.innerHTML += `<div class="text-left"><div class="bg-gray-100 p-3 rounded-lg text-sm inline-block border text-gray-800">${marked.parse(reply)}</div></div>`;
                 } else if (data.error) {
                     chatBox.innerHTML += `<div class="text-left text-red-600 text-xs bg-red-50 p-2 rounded border border-red-200"><strong>API Error (${data.error.code || 'Error'}):</strong> ${data.error.message}</div>`;
+                    chatHistory.pop(); // Remove failed prompt from state tracking
                 } else {
                     chatBox.innerHTML += `<div class="text-left text-red-600 text-xs bg-red-50 p-2 rounded border border-red-200">Error: Received invalid format from API.</div>`;
+                    chatHistory.pop();
                 }
             } catch (err) {
                 document.getElementById(loadingId).remove();
                 chatBox.innerHTML += `<div class="text-left text-red-600 text-xs bg-red-50 p-2 rounded border border-red-200">Network Error: Unable to complete request. Check connectivity or API key.</div>`;
+                chatHistory.pop();
             }
             chatBox.scrollTop = chatBox.scrollHeight;
         }
