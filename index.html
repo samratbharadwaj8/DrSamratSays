@@ -157,7 +157,8 @@
             chatBox.scrollTop = chatBox.scrollHeight;
 
             try {
-                const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+                // Active stable endpoint for Google Gemini API
+                const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
                 
                 const response = await fetch(endpoint, {
                     method: 'POST',
